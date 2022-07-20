@@ -1,0 +1,146 @@
+substitutions:
+  relative_brightness: "3"
+  dim_loop_delay: 0.2s
+
+globals:
+  - id: action_ref
+    type: int
+  - id: last_action
+    type: int
+
+script:
+  - id: update_action_ref
+    mode: queued
+    then:
+      - lambda: |-
+          id(action_ref) += 1;
+  - id: update_last_action
+    mode: restart
+    then:
+      - script.wait: update_action_ref
+      - lambda: |-
+          id(last_action) = id(action_ref);
+  - id: light_turn_on
+    mode: single
+    then:
+      - if: 
+          condition:
+            - light.is_off: ${deviceid}_light
+          then:
+            - script.execute: update_last_action
+            - light.turn_on: ${deviceid}_light
+  - id: light_turn_off
+    mode: single
+    then:
+      - script.wait: update_action_ref
+      - script.wait: update_last_action
+      - if: 
+          condition:
+            - light.is_on: ${deviceid}_light
+            - lambda: |-
+                return id(last_action) != id(action_ref);
+          then:
+            - script.execute: update_last_action
+            - light.turn_off: ${deviceid}_light
+  - id: light_brightness_max
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - light.turn_on:
+          id: ${deviceid}_light
+          brightness: 100%
+  - id: light_brightness_min
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - light.turn_on:
+          id: ${deviceid}_light
+          brightness: 1%
+  - id: light_brightness_increase
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - while:
+          condition:
+            - binary_sensor.is_on: ${deviceid}_button_left
+            - lambda: |-
+                return id(${deviceid}_light).remote_values.get_brightness() < 1;
+          then:
+            - light.dim_relative:
+                id: ${deviceid}_light
+                relative_brightness: ${relative_brightness}%
+                transition_length: 0.1s
+            - delay: $dim_loop_delay
+  - id: light_brightness_decrease
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - while:
+          condition:
+            - binary_sensor.is_on: ${deviceid}_button_right
+            - lambda: |-
+                return id(${deviceid}_light).remote_values.get_brightness() * 100 > ${relative_brightness};
+          then:
+            - light.dim_relative:
+                id: ${deviceid}_light
+                relative_brightness: -${relative_brightness}%
+                transition_length: 0.1s
+            - delay: $dim_loop_delay
+
+
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO12
+    name: "$devicename Button Left"
+    id: ${deviceid}_button_left
+    on_press:
+      then:
+        - script.execute: update_action_ref
+        - script.execute: light_turn_on
+              
+    on_multi_click:
+      - timing:
+        - ON for at least 10ms
+        - OFF for at least 400ms
+        then:
+          - script.execute: light_turn_off
+      - timing:
+        - ON for 1ms to 500ms
+        - OFF for at most 500ms
+        - ON for 1ms to 500ms
+        then:
+          - script.execute: light_brightness_max
+      - timing:
+        - ON for at least 200ms
+        then:
+          - script.execute: light_brightness_increase
+              
+  - platform: gpio
+    pin:
+      number: GPIO14
+    name: "$devicename Button Right"
+    id: ${deviceid}_button_right
+    on_press:
+      then:
+        - script.execute: update_action_ref
+        - script.execute: light_turn_on
+        
+    on_multi_click:
+      - timing:
+        - ON for at least 10ms
+        - OFF for at least 400ms
+        then:
+          - script.execute: light_turn_off
+      - timing:
+        - ON for 1ms to 500ms
+        - OFF for at most 500ms
+        - ON for 1ms to 500ms
+        then:
+          - script.execute: light_brightness_min
+      - timing:
+        - ON for at least 200ms
+        then:
+          - script.execute: light_brightness_decrease
+          
