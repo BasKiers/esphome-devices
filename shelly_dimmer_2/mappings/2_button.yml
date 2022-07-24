@@ -14,12 +14,20 @@ script:
     then:
       - lambda: |-
           id(action_ref) += 1;
+      - logger.log:
+          level: INFO
+          format: Updated action_ref to %d
+          args: [ "id(action_ref)" ]
   - id: update_last_action
     mode: restart
     then:
       - script.wait: update_action_ref
       - lambda: |-
           id(last_action) = id(action_ref);
+      - logger.log:
+          level: INFO
+          format: Updated last_action to %d
+          args: [ "id(last_action)" ]
   - id: light_turn_on
     mode: single
     then:
@@ -27,8 +35,15 @@ script:
           condition:
             - light.is_off: ${deviceid}_light
           then:
+            - logger.log:
+                level: INFO
+                format: Turning light on
             - script.execute: update_last_action
             - light.turn_on: ${deviceid}_light
+          else:
+            - logger.log:
+                level: INFO
+                format: "[Skipped] Turning light on"
   - id: light_turn_off
     mode: single
     then:
@@ -40,8 +55,15 @@ script:
             - lambda: |-
                 return id(last_action) != id(action_ref);
           then:
+            - logger.log:
+                level: INFO
+                format: Turning light off
             - script.execute: update_last_action
             - light.turn_off: ${deviceid}_light
+          else:
+            - logger.log:
+                level: INFO
+                format: "[Skipped] Turning light off"
   - id: light_brightness_max
     mode: single
     then:
@@ -97,8 +119,17 @@ binary_sensor:
     id: ${deviceid}_button_left
     on_press:
       then:
+        - logger.log:
+            level: INFO
+            format: Button Left pressed
         - script.execute: update_action_ref
         - script.execute: light_turn_on
+
+    on_release:
+      then:
+        - logger.log:
+            level: INFO
+            format: Button Left released
               
     on_multi_click:
       - timing:
@@ -124,9 +155,18 @@ binary_sensor:
     id: ${deviceid}_button_right
     on_press:
       then:
+        - logger.log:
+            level: INFO
+            format: Button Right pressed
         - script.execute: update_action_ref
         - script.execute: light_turn_on
-        
+
+    on_release:
+      then:
+        - logger.log:
+            level: INFO
+            format: Button Right released
+
     on_multi_click:
       - timing:
         - ON for at least 10ms
