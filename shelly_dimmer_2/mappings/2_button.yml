@@ -113,6 +113,8 @@ binary_sensor:
   - platform: gpio
     pin:
       number: GPIO12
+      mode:
+        input: true
     name: "$devicename Button Left"
     id: ${deviceid}_button_left
     on_press:
@@ -153,6 +155,8 @@ binary_sensor:
   - platform: gpio
     pin:
       number: GPIO14
+      mode:
+        input: true
     name: "$devicename Button Right"
     id: ${deviceid}_button_right
     on_press:
