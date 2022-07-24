@@ -81,7 +81,6 @@ script:
   - id: light_brightness_increase
     mode: single
     then:
-      - script.execute: update_last_action
       - while:
           condition:
             - binary_sensor.is_on: ${deviceid}_button_left
@@ -96,7 +95,6 @@ script:
   - id: light_brightness_decrease
     mode: single
     then:
-      - script.execute: update_last_action
       - while:
           condition:
             - binary_sensor.is_on: ${deviceid}_button_right
@@ -147,6 +145,10 @@ binary_sensor:
         - ON for at least 200ms
         then:
           - script.execute: light_brightness_increase
+      - timing:
+        - ON for at least 1000ms
+        then:
+          - script.execute: update_last_action
               
   - platform: gpio
     pin:
@@ -183,4 +185,8 @@ binary_sensor:
         - ON for at least 200ms
         then:
           - script.execute: light_brightness_decrease
+      - timing:
+        - ON for at least 1000ms
+        then:
+          - script.execute: update_last_action
           
