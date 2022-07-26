@@ -3,12 +3,19 @@ substitutions:
   dim_loop_delay: 0.2s
 
 globals:
+  - id: before_state
+    type: bool
   - id: action_ref
     type: int
   - id: last_action
     type: int
 
 script:
+  - id: set_before_state
+    mode: restart
+    then:
+      - lambda: |-
+          id(before_state) = id(${deviceid}_light).current_values.is_on();
   - id: update_action_ref
     mode: queued
     then:
@@ -31,7 +38,7 @@ script:
   - id: light_turn_on
     mode: single
     then:
-      - if: 
+      - if:
           condition:
             - light.is_off: ${deviceid}_light
           then:
@@ -49,7 +56,7 @@ script:
     then:
       - script.wait: update_action_ref
       - script.wait: update_last_action
-      - if: 
+      - if:
           condition:
             - light.is_on: ${deviceid}_light
             - lambda: |-
@@ -107,8 +114,6 @@ script:
                 transition_length: 0.1s
             - delay: $dim_loop_delay
 
-
-
 binary_sensor:
   - platform: gpio
     pin:
@@ -122,15 +127,15 @@ binary_sensor:
         - logger.log:
             level: INFO
             format: Button Left pressed
+        - script.execute: set_before_state
         - script.execute: update_action_ref
         - script.execute: light_turn_on
-
     on_release:
-      then:
-        - logger.log:
-            level: INFO
-            format: Button Left released
-              
+          then:
+            - logger.log:
+                level: INFO
+                format: Button Left released
+
     on_multi_click:
       - timing:
         - ON for at least 10ms
@@ -148,10 +153,19 @@ binary_sensor:
         then:
           - script.execute: light_brightness_increase
       - timing:
+          - ON for at least 500ms
+        then:
+          - if:
+              condition:
+                lambda: |-
+                  return !id(before_state);
+              then: 
+                - script.execute: light_brightness_min
+      - timing:
         - ON for at least 1000ms
         then:
           - script.execute: update_last_action
-              
+
   - platform: gpio
     pin:
       number: GPIO14
@@ -166,13 +180,11 @@ binary_sensor:
             format: Button Right pressed
         - script.execute: update_action_ref
         - script.execute: light_turn_on
-
     on_release:
-      then:
-        - logger.log:
-            level: INFO
-            format: Button Right released
-
+          then:
+            - logger.log:
+                level: INFO
+                format: Button Right released
     on_multi_click:
       - timing:
         - ON for at least 10ms
@@ -190,7 +202,17 @@ binary_sensor:
         then:
           - script.execute: light_brightness_decrease
       - timing:
+          - ON for at least 500ms
+        then:
+          - if:
+              condition:
+                lambda: |-
+                  return !id(before_state);
+              then: 
+                - script.execute: light_brightness_min
+      - timing:
         - ON for at least 1000ms
         then:
           - script.execute: update_last_action
-          
+
+
