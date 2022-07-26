@@ -1,0 +1,200 @@
+substitutions:
+  relative_brightness: "3"
+  dim_loop_delay: 0.2s
+
+globals:
+  - id: before_state
+    type: bool
+  - id: last_button_is_left
+    type: bool
+  - id: action_ref
+    type: int
+  - id: last_action
+    type: int
+
+script:
+  - id: set_before_state
+    mode: restart
+    then:
+      - lambda: |-
+          id(before_state) = id(${deviceid}_light).current_values.is_on();
+  - id: update_action_ref
+    mode: queued
+    then:
+      - lambda: |-
+          id(action_ref) += 1;
+      - logger.log:
+          level: INFO
+          format: Updated action_ref to %d
+          args: [ "id(action_ref)" ]
+  - id: update_last_action
+    mode: restart
+    then:
+      - script.wait: update_action_ref
+      - lambda: |-
+          id(last_action) = id(action_ref);
+      - logger.log:
+          level: INFO
+          format: Updated last_action to %d
+          args: [ "id(last_action)" ]
+  - id: light_turn_on
+    mode: single
+    then:
+      - if:
+          condition:
+            - light.is_off: ${deviceid}_light
+          then:
+            - logger.log:
+                level: INFO
+                format: Turning light on
+            - script.execute: update_last_action
+            - light.turn_on: ${deviceid}_light
+          else:
+            - logger.log:
+                level: INFO
+                format: "[Skipped] Turning light on"
+  - id: light_turn_off
+    mode: single
+    then:
+      - script.wait: update_action_ref
+      - script.wait: update_last_action
+      - if:
+          condition:
+            - light.is_on: ${deviceid}_light
+            - lambda: |-
+                return id(last_action) != id(action_ref);
+          then:
+            - logger.log:
+                level: INFO
+                format: Turning light off
+            - script.execute: update_last_action
+            - binary_sensor.template.publish:
+              id: ${deviceid}_turning_off
+              state: true
+            - light.turn_off: ${deviceid}_light
+          else:
+            - logger.log:
+                level: INFO
+                format: "[Skipped] Turning light off"
+  - id: light_brightness_max
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - light.turn_on:
+          id: ${deviceid}_light
+          brightness: 100%
+  - id: light_brightness_min
+    mode: single
+    then:
+      - script.execute: update_last_action
+      - light.turn_on:
+          id: ${deviceid}_light
+          brightness: 1%
+  - id: light_brightness_increase
+    mode: single
+    then:
+      - while:
+          condition:
+            - binary_sensor.is_on: ${deviceid}_button_dual
+            - lambda: |-
+                return id(${deviceid}_light).remote_values.get_brightness() < 1;
+          then:
+            - light.dim_relative:
+                id: ${deviceid}_light
+                relative_brightness: ${relative_brightness}%
+                transition_length: 0.1s
+            - delay: $dim_loop_delay
+  - id: light_brightness_decrease
+    mode: single
+    then:
+      - while:
+          condition:
+            - binary_sensor.is_on: ${deviceid}_button_dual
+            - lambda: |-
+                return id(${deviceid}_light).remote_values.get_brightness() * 100 > ${relative_brightness};
+          then:
+            - light.dim_relative:
+                id: ${deviceid}_light
+                relative_brightness: -${relative_brightness}%
+                transition_length: 0.1s
+            - delay: $dim_loop_delay
+  - id: reset_turning_off
+    mode: restart
+    then:
+      - delay: 2s
+      - binary_sensor.template.publish:
+          id: ${deviceid}_turning_off
+          state: false
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO12
+      mode:
+        input: true
+    name: "$devicename Button Left"
+    id: ${deviceid}_button_left
+
+  - platform: gpio
+    pin:
+      number: GPIO14
+      mode:
+        input: true
+    name: "$devicename Button Right"
+    id: ${deviceid}_button_right
+
+  - platform: template
+    name: "$devicename Turning Off"
+    id: ${deviceid}_turning_off
+    on_press:
+      - script.execute: reset_turning_off
+
+  - platform: template
+    name: "$devicename Button Dual"
+    id: ${deviceid}_button_dual
+    lambda: |-
+      return id(${deviceid}_button_left).state && id(${deviceid}_button_right).state
+    on_press:
+      then:
+        - logger.log:
+            level: INFO
+            format: Button Dual pressed
+        - script.execute: update_action_ref
+        - script.execute: light_turn_on
+    on_release:
+      then:
+        - logger.log:
+            level: INFO
+            format: Button Dual released
+    on_multi_click:
+      - timing:
+        - ON for 1ms to 500ms
+        - OFF for at least 500ms
+        then:
+          - script.execute: light_turn_off
+      - timing:
+        - ON for 1ms to 500ms
+        - OFF for at most 500ms
+        - ON for at least 1ms
+        then:
+          - script.execute: light_brightness_max
+      - timing:
+        - ON for at least 200ms
+        then:
+          - if:
+              condition:
+                - lambda: |-
+                    return id(${deviceid}_light).remote_values.get_brightness() * 100 > ${relative_brightness};
+              then: 
+                - script.execute: light_brightness_decrease
+              else: 
+                - script.execute: light_brightness_increase
+      - timing:
+          - ON for at least 500ms
+        then:
+          - if:
+              condition:
+                lambda: |-
+                  return !id(before_state);
+              then: 
+                - script.execute: light_brightness_min
