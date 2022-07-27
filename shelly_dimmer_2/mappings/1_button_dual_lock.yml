@@ -184,7 +184,7 @@ binary_sensor:
     name: "$devicename Button Dual"
     id: ${deviceid}_button_dual
     lambda: |-
-      return id(${deviceid}_button_action).state && id(${deviceid}_button_override).state
+      return id(${deviceid}_button_action).state && id(${deviceid}_button_override).state;
     on_release:
       then:
         - logger.log:
