@@ -1,7 +1,6 @@
 substitutions:
   relative_brightness: "3"
   dim_loop_delay: 0.2s
-  override_entity_id: binary_sensor.baby_room_ceiling_turning_off
 
 globals:
   - id: before_state
