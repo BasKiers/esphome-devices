@@ -69,8 +69,8 @@ script:
                 format: Turning light off
             - script.execute: update_last_action
             - binary_sensor.template.publish:
-              id: ${deviceid}_turning_off
-              state: true
+                id: ${deviceid}_turning_off
+                state: true
             - light.turn_off: ${deviceid}_light
           else:
             - logger.log:
@@ -153,7 +153,7 @@ binary_sensor:
     name: "$devicename Button Dual"
     id: ${deviceid}_button_dual
     lambda: |-
-      return id(${deviceid}_button_left).state && id(${deviceid}_button_right).state
+      return id(${deviceid}_button_left).state && id(${deviceid}_button_right).state;
     on_press:
       then:
         - logger.log:
