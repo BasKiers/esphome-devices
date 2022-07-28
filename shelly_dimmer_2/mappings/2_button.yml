@@ -138,18 +138,18 @@ binary_sensor:
 
     on_multi_click:
       - timing:
-        - ON for at least 10ms
-        - OFF for at least 400ms
+          - ON for at least 10ms
+          - OFF for at least 400ms
         then:
           - script.execute: light_turn_off
       - timing:
-        - ON for 1ms to 500ms
-        - OFF for at most 500ms
-        - ON for 1ms to 500ms
+          - ON for 1ms to 500ms
+          - OFF for at most 500ms
+          - ON for 1ms to 500ms
         then:
           - script.execute: light_brightness_max
       - timing:
-        - ON for at least 200ms
+          - ON for at least 200ms
         then:
           - script.execute: light_brightness_increase
       - timing:
@@ -187,21 +187,22 @@ binary_sensor:
                 format: Button Right released
     on_multi_click:
       - timing:
-        - ON for at least 10ms
-        - OFF for at least 400ms
+          - ON for at least 10ms
+          - OFF for at least 400ms
         then:
           - script.execute: light_turn_off
       - timing:
-        - ON for 1ms to 500ms
-        - OFF for at most 500ms
-        - ON for 1ms to 500ms
+          - ON for 1ms to 500ms
+          - OFF for at most 500ms
+          - ON for 1ms to 500ms
         then:
           - script.execute: light_brightness_min
       - timing:
-        - ON for at least 200ms
+          - ON for at least 200ms
         then:
           - script.execute: light_brightness_decrease
       - timing:
+          - OFF for at least 500ms
           - ON for at least 500ms
         then:
           - if:
@@ -211,7 +212,7 @@ binary_sensor:
               then: 
                 - script.execute: light_brightness_min
       - timing:
-        - ON for at least 1000ms
+          - ON for at least 1000ms
         then:
           - script.execute: update_last_action
 

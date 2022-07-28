@@ -5,8 +5,6 @@ substitutions:
 globals:
   - id: before_state
     type: bool
-  - id: last_button_is_left
-    type: bool
   - id: action_ref
     type: int
   - id: last_action
@@ -168,18 +166,19 @@ binary_sensor:
             format: Button Dual released
     on_multi_click:
       - timing:
-        - ON for 1ms to 500ms
-        - OFF for at least 500ms
+          - ON for 1ms to 500ms
+          - OFF for at least 500ms
         then:
           - script.execute: light_turn_off
       - timing:
-        - ON for 1ms to 500ms
-        - OFF for at most 500ms
-        - ON for at least 1ms
+          - ON for 1ms to 500ms
+          - OFF for at most 500ms
+          - ON for at least 1ms
         then:
           - script.execute: light_brightness_max
       - timing:
-        - ON for at least 200ms
+          - OFF for at least 500ms
+          - ON for at least 200ms
         then:
           - if:
               condition:
