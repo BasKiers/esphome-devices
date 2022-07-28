@@ -1,3 +1,8 @@
+substitutions:
+  min_brightness: "150"
+  max_brightness: "700"
+  warmup_brightness: "400"
+
 esp8266:
   board: esp01_1m
 
@@ -25,9 +30,9 @@ light:
     current:
       name: $devicename Light Current
     leading_edge: false
-    min_brightness: 150
-    max_brightness: 700
-    warmup_brightness: 400
+    min_brightness: $min_brightness
+    max_brightness: $max_brightness
+    warmup_brightness: $warmup_brightness
     firmware:
       version: "51.5"
       update: true
