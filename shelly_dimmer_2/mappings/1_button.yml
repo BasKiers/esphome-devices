@@ -137,7 +137,7 @@ binary_sensor:
     name: "$devicename Button"
     id: ${deviceid}_button
     lambda: |-
-      return id(${deviceid}_button_left).state || id(${deviceid}_button_right).state;
+      return id(${deviceid}_input_1).state || id(${deviceid}_input_2).state;
     on_press:
       then:
         - logger.log:
