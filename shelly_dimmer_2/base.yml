@@ -13,21 +13,28 @@ uart:
 
 status_led:
   pin: GPIO15
-  
+
 output:
   - platform: gpio
     pin: GPIO05
     id: SHDReset
+
+time:
+  - platform: homeassistant
+    id: ha_time
 
 light:
   - platform: shelly_dimmer
     name: $devicename Light
     id: ${deviceid}_light
     power:
+      id: ${deviceid}_power
       name: $devicename Light Power
     voltage:
+      id: ${deviceid}_voltage
       name: $devicename Light Voltage
     current:
+      id: ${deviceid}_current
       name: $devicename Light Current
     leading_edge: false
     min_brightness: $min_brightness
@@ -70,3 +77,11 @@ sensor:
   - platform: adc
     pin: VCC
     name: "$devicename VCC"
+
+  - platform: total_daily_energy
+    name: Daily Energy (Wh)
+    id: ${deviceid}_daily_energy
+    power_id: ${deviceid}_power
+    unit_of_measurement: Wh
+    device_class: energy
+    state_class: total_increasing
