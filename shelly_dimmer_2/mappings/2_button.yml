@@ -1,6 +1,8 @@
 substitutions:
   relative_brightness: "3"
-  dim_loop_delay: 0.2s
+  dim_loop_delay: 0.2s+
+  gpio_button_left: GPIO12
+  gpio_button_right: GPIO14
 
 globals:
   - id: before_state
@@ -117,7 +119,7 @@ script:
 binary_sensor:
   - platform: gpio
     pin:
-      number: GPIO12
+      number: ${gpio_button_left}
       mode:
         input: true
     name: "$devicename Button Left"
@@ -168,7 +170,7 @@ binary_sensor:
 
   - platform: gpio
     pin:
-      number: GPIO14
+      number: ${gpio_button_right}
       mode:
         input: true
     name: "$devicename Button Right"
