@@ -1,6 +1,6 @@
 substitutions:
   relative_brightness: "3"
-  dim_loop_delay: 0.2s+
+  dim_loop_delay: 0.2s
   gpio_button_left: GPIO12
   gpio_button_right: GPIO14
 
