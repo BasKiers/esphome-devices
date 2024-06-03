@@ -14,11 +14,6 @@ uart:
 status_led:
   pin: GPIO15
 
-output:
-  - platform: gpio
-    pin: GPIO05
-    id: SHDReset
-
 time:
   - platform: homeassistant
     id: ha_time
