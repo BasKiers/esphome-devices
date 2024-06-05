@@ -2,7 +2,7 @@ substitutions:
   min_brightness: "40"
   max_brightness: "1000"
   warmup_brightness: "150"
-  gamma_correct: "4"
+  gamma_correct: "2.8"
 
 esp8266:
   board: esp01_1m
