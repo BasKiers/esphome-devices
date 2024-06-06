@@ -1,7 +1,7 @@
 substitutions:
   min_brightness: "40"
   max_brightness: "1000"
-  warmup_brightness: "150"
+  warmup_brightness: "125"
   gamma_correct: "2.8"
 
 esp8266:
