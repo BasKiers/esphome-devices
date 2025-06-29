@@ -1,0 +1,203 @@
+# LilyGo T-Relay S3 Irrigation Controller - Simplified Multiplexing
+# Controls 8 latching solenoid valves using simplified multiplexing
+# Uses 3 relays: 1 black wire control + 1 red wire voltage source + 1 valve selector
+
+substitutions:
+  device_name: "irrigation-controller-polarity-mux"
+  friendly_name: "Irrigation Controller Polarity MUX"
+  device_description: "LilyGo T-Relay S3 with simplified multiplexing for 1 zone irrigation system (testing)"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  comment: ${device_description}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# Include common base configuration
+<<: !include ../common/base.yml
+
+# WiFi configuration
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "${device_name} Fallback Hotspot"
+    password: !secret fallback_password
+
+captive_portal:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Web server for local control
+web_server:
+  port: 80
+
+# Status LED (built-in LED on GPIO38)
+status_led:
+  pin: GPIO38
+
+# I2C for chain module
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+# PCF8574 I/O expander for chain module
+pcf8574:
+  - id: pcf8574_hub
+    address: 0x20
+    pcf8575: false
+
+# SIMPLIFIED MULTIPLEXING CONFIGURATION
+# Uses 3 relays total: 1 black wire control + 1 red wire voltage source + 1 valve selector (testing with 1 zone)
+switch:
+  # Black Wire Control Relay (Controls all black valve wires)
+  # NC = 0V, NO = 24V+, COM = all black valve wires
+  - platform: gpio
+    name: "${friendly_name} Black Wire Control"
+    id: black_wire_control
+    pin: GPIO1
+    internal: true
+
+  # Red Wire Voltage Source Relay (Controls voltage available to red wires)
+  # NC = 0V, NO = 24V+, COM = to all valve relay NO terminals
+  - platform: gpio
+    name: "${friendly_name} Red Wire Voltage Source"
+    id: red_wire_voltage_source
+    pin: GPIO2
+    internal: true
+
+  # Zone 1 Valve Selector (Connects red wire to voltage source)
+  # NC = Nothing, NO = voltage from red wire source, COM = valve red wire
+  - platform: gpio
+    name: "${friendly_name} Zone 1 Selector"
+    id: zone_1_selector
+    pin: GPIO3
+    internal: true
+
+  # Template switch for zone 1 using simplified multiplexing
+  - platform: template
+    name: "${friendly_name} Zone 1 Valve"
+    id: zone_1_valve
+    optimistic: true
+    turn_on_action:
+      # OPEN valve: Black=0V, Red=24V+
+      - switch.turn_off: black_wire_control # Black wire = 0V (NC)
+      - switch.turn_on: red_wire_voltage_source # Red wire source = 24V+ (NO)
+      - delay: 10ms # Allow voltage to settle
+      - switch.turn_on: zone_1_selector # Connect red wire to 24V+
+      - delay: 500ms # Pulse duration
+      - switch.turn_off: zone_1_selector # Disconnect red wire
+    turn_off_action:
+      # CLOSE valve: Black=24V+, Red=0V
+      - switch.turn_on: black_wire_control # Black wire = 24V+ (NO)
+      - switch.turn_off: red_wire_voltage_source # Red wire source = 0V (NC)
+      - delay: 10ms # Allow voltage to settle
+      - switch.turn_on: zone_1_selector # Connect red wire to 0V
+      - delay: 500ms # Pulse duration
+      - switch.turn_off: zone_1_selector # Disconnect red wire
+
+# Binary sensors for physical buttons (optional)
+binary_sensor:
+  - platform: gpio
+    name: "${friendly_name} Button 1"
+    pin:
+      number: GPIO0
+      mode: INPUT_PULLUP
+      inverted: true
+    on_press:
+      - sprinkler.start_single_valve:
+          id: irrigation_controller
+          valve_number: 0
+
+# Sprinkler controller component - 1 zone for testing
+sprinkler:
+  - id: irrigation_controller
+    main_switch: "${friendly_name} Controller"
+    auto_advance_switch: "${friendly_name} Auto Advance"
+    reverse_switch: "${friendly_name} Reverse"
+    standby_switch: "${friendly_name} Standby"
+
+    valves:
+      - valve_switch: "Zone 1 Test Valve"
+        enable_switch: "${friendly_name} Zone 1 Enable"
+        run_duration: 10s
+        valve_switch_id: zone_1_valve
+
+# Automation for simple irrigation cycle
+# automation:
+#   - id: simple_irrigation_cycle
+#     alias: "Simple Irrigation Cycle"
+#     trigger:
+#       - platform: time
+#         at: "06:00:00" # Start at 6 AM
+#     action:
+#       - sprinkler.start_full_cycle: irrigation_controller
+#       - delay: 1min # 1 minute delay between zones as requested
+
+# Numbers for dynamic control of run times
+number:
+  - platform: template
+    name: "${friendly_name} Zone 1 Duration"
+    id: zone_1_duration
+    unit_of_measurement: "s"
+    mode: box
+    min_value: 1
+    max_value: 60
+    step: 1
+    initial_value: 10
+    optimistic: true
+    set_action:
+      - sprinkler.set_valve_run_duration:
+          id: irrigation_controller
+          valve_number: 0
+          run_duration: !lambda "return x;"
+
+# Sensors for monitoring
+sensor:
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+
+# Text sensors for status
+text_sensor:
+  - platform: template
+    name: "${friendly_name} Active Valve"
+    id: active_valve_sensor
+    lambda: |-
+      if (id(irrigation_controller).active_valve().has_value()) {
+        return {"Zone " + to_string(id(irrigation_controller).active_valve().value() + 1)};
+      } else {
+        return {"None"};
+      }
+    update_interval: 1s
+
+  - platform: template
+    name: "${friendly_name} Time Remaining"
+    id: time_remaining_sensor
+    lambda: |-
+      if (id(irrigation_controller).time_remaining_active_valve().has_value()) {
+        int seconds = id(irrigation_controller).time_remaining_active_valve().value();
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+        return {to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + to_string(seconds)};
+      } else {
+        return {"--:--"};
+      }
+    update_interval: 1s
