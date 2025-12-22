@@ -1,2 +1,4 @@
 .idea/
 secrets.*
+*.bak
+**/.DS_STORE
