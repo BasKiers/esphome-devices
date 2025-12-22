@@ -99,7 +99,7 @@ script:
             - light.dim_relative:
                 id: ${deviceid}_light
                 relative_brightness: ${relative_brightness}%
-                transition_length: 0.1s
+                transition_length: 0.01s
             - delay: $dim_loop_delay
   - id: light_brightness_decrease
     mode: single
@@ -113,7 +113,7 @@ script:
             - light.dim_relative:
                 id: ${deviceid}_light
                 relative_brightness: -${relative_brightness}%
-                transition_length: 0.1s
+                transition_length: 0.01s
             - delay: $dim_loop_delay
 
 binary_sensor:
