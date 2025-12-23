@@ -1,7 +1,10 @@
 substitutions:
-  # Brightness as percentage (0-100), where 0% = 40, 100% = 1000
-  min_brightness_pct: "0"
-  max_brightness_pct: "100"
+  # Brightness as percentage (0-100)
+  min_brightness_pct: 0
+  max_brightness_pct: 100
+  # Calculated brightness values (40-1000 range)
+  min_brightness: ${40 + (min_brightness_pct * 960 / 100) | int}
+  max_brightness: ${40 + (max_brightness_pct * 960 / 100) | int}
   warmup_brightness: "150"
   gamma_correct: "2.8"
 
@@ -36,8 +39,8 @@ light:
       id: ${deviceid}_current
       name: $devicename Light Current
     leading_edge: false
-    min_brightness: !lambda "return (int)(40 + ${min_brightness_pct} * 9.6);"
-    max_brightness: !lambda "return (int)(40 + ${max_brightness_pct} * 9.6);"
+    min_brightness: $min_brightness
+    max_brightness: $max_brightness
     warmup_brightness: $warmup_brightness
     gamma_correct: $gamma_correct
     restore_mode: RESTORE_AND_OFF
