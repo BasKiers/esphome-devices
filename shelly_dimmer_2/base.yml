@@ -2,10 +2,11 @@ substitutions:
   # Brightness as percentage (0-100)
   min_brightness_pct: 0
   max_brightness_pct: 100
+  warmup_brightness_pct: 12
   # Calculated brightness values (40-1000 range)
   min_brightness: ${40 + (min_brightness_pct * 960 / 100) | int}
   max_brightness: ${40 + (max_brightness_pct * 960 / 100) | int}
-  warmup_brightness: "150"
+  warmup_brightness: ${40 + (warmup_brightness_pct * 960 / 100) | int}
   gamma_correct: "2.8"
 
 esp8266:
