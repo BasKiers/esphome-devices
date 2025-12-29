@@ -38,7 +38,7 @@ wifi:
   power_save_mode: light
   ssid: "${wifi_ssid}"
   password: "${wifi_password}"
-  use_address: "${device_ip}"
+  # use_address: "${device_ip}"
   min_auth_mode: WPA2
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails

@@ -12,7 +12,7 @@ substitutions:
   device_location_code: "bedroom01"
   device_location_name: "Bedroom 1"
   device_number: "089"
-  device_ip: "0.0.0.0"
+  # device_ip: "0.0.0.0"
 
   # Device type substitutions
   device_type_code: "dimr"
