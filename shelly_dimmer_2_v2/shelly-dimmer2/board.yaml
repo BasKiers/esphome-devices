@@ -56,6 +56,5 @@ binary_sensor:
   - platform: gpio
     pin:
       number: GPIO16
-      internal: true
       mode: INPUT_PULLUP
-
+    internal: true
