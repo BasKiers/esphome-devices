@@ -47,16 +47,17 @@ binary_sensor:
     disabled_by_default: true
 
 sensor:
-  # Device Memory
+  # Device Memory (ESP8266 compatible)
   - platform: template
     id: esp_memory
     icon: mdi:memory
     name: Free Memory
-    lambda: return heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024;
+    lambda: return ESP.getFreeHeap() / 1024.0;
     unit_of_measurement: "kB"
     state_class: measurement
     entity_category: "diagnostic"
     disabled_by_default: true
+    update_interval: 60s
 
   # Captures the uptime and updates the human-readable
   # text sensor displayed. This is an internal sensor only.
