@@ -1,0 +1,101 @@
+# NOTE: This file is not a stand-alone package. It is part of
+# a 'root' device template and expects the substitutions that
+# are hereby referenced to be defined by its parent.
+
+substitutions:
+  log_level: INFO
+  timezone: "Europe/Amsterdam"
+
+# Enable logging via network and disable serial port
+logger:
+  level: "${log_level}"
+  baud_rate: 0
+
+# Provide date and time
+time:
+  - platform: sntp
+    id: time_service
+    timezone: ${timezone}
+    update_interval: 15min
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+# Diagnostic output sensors
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: ip_address
+      name: "IP Address"
+      icon: "mdi:wan"
+
+  - platform: template
+    name: "Uptime"
+    id: uptime_human
+    icon: "mdi:timer-check-outline"
+    update_interval: 60s
+    entity_category: "diagnostic"
+    disabled_by_default: true
+
+binary_sensor:
+  # Diagnostic sensor for connection
+  - platform: status
+    icon: "mdi:home-assistant"
+    name: "API Status"
+    id: sensor_status
+    disabled_by_default: true
+
+sensor:
+  # Device Memory
+  - platform: template
+    id: esp_memory
+    icon: mdi:memory
+    name: Free Memory
+    lambda: return heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024;
+    unit_of_measurement: "kB"
+    state_class: measurement
+    entity_category: "diagnostic"
+    disabled_by_default: true
+
+  # Captures the uptime and updates the human-readable
+  # text sensor displayed. This is an internal sensor only.
+  - platform: uptime
+    name: "Uptime"
+    id: sensor_uptime
+    update_interval: 60s
+    entity_category: "diagnostic"
+    internal: true
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id: uptime_human
+            state: !lambda |-
+              int seconds = round(id(sensor_uptime).raw_state);
+              int days = seconds / (24 * 3600);
+              seconds = seconds % (24 * 3600);
+              int hours = seconds / 3600;
+              seconds = seconds % 3600;
+              int minutes = seconds /  60;
+              seconds = seconds % 60;
+              return (
+                (days ? String(days) + "d " : "") +
+                (hours ? String(hours) + "h " : "") +
+                (minutes ? String(minutes) + "m " : "") +
+                (String(seconds) + "s")
+              ).c_str();
+
+# Provide a pre-built button for restarting the device
+button:
+  - platform: restart
+    name: "Reboot Device"
+    id: button_restart
+    icon: mdi:power-cycle
+    entity_category: "diagnostic"
+
+  # Provide a button to reset all defined flash settings.
+  - platform: factory_reset
+    disabled_by_default: false
+    name: "Load Factory Settings"
+    id: factory_reset_all
+    icon: mdi:factory

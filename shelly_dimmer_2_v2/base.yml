@@ -1,0 +1,132 @@
+# ESPHome firmware template for Shelly Dimmer2
+#
+# Based on: https://github.com/mariodivece/esphometemplates
+# Initial code taken from:
+# https://github.com/esphome/issues/issues/3487
+# Analysis from:
+# https://github.com/arendst/Tasmota/issues/6914
+
+substitutions:
+  # Required import substitutions
+  device_site: "home"
+  device_location_code: "bedroom01"
+  device_location_name: "Bedroom 1"
+  device_number: "089"
+  device_ip: "0.0.0.0"
+
+  # Device type substitutions
+  device_type_code: "dimr"
+  device_type_name: "Dimmer"
+
+  # Optional, device-specific substitutions
+  dimmer_min_level: "470" # from 0 to 1000
+  dimmer_max_level: "1000" # from 0 to 1000
+  dimmer_warmup_level: "250" # from 0 to 1000
+  dimmer_gamma_correct: "2.8" # 2.8 is the default. 0.0 means linear (LEDs)
+  dimmer_leading_edge: "false" # False for LEDs
+  dimmer_stmfw_update: "false" # Automatically update the STM32 FW (not reversible as of today)
+  dimmer_stmfw_version: "51.6" # Can use 51.7 (removes neutral line support but reduces flickering)
+  dimmer_max_temp: "70" # (in °C) # For over-temperature protection
+  dimmer_max_current: "1.0" # (in A) Rated for 1.1 Amp
+  dimmer_max_power: "190" # (in W) Rated for 220W
+
+  # Timing Configurations
+  timing_press_threshold: "300ms"
+  timing_timer_duration: "5s"
+  timing_dimming_step: "0.5%"
+  timing_dimming_time: "10ms"
+
+  # Project Substitutions (not intended for user substitution)
+  device_model: "Dimmer2"
+  device_make: "Shelly"
+  package_version: "2024.2.14"
+
+# Import packages (local includes)
+packages:
+  standard_project: !include standard/project.yaml
+  standard_diagnostics: !include standard/diagnostics.yaml
+  standard_wifi: !include standard/wifi.yaml
+  shelly_board: !include shelly-dimmer2/board.yaml
+  shelly_scripts: !include shelly-dimmer2/scripts.yaml
+  shelly_temperature: !include shelly-dimmer2/temperature.yaml
+  shelly_switches: !include shelly-dimmer2/switches.yaml
+  shelly_buttons: !include shelly-dimmer2/buttons.yaml
+
+# Use the shelly_dimmer built-in platform
+light:
+  # Monochromatic light using the built-in platform
+  - platform: shelly_dimmer
+    name: "Dimmer"
+    id: dimmer
+    leading_edge: ${dimmer_leading_edge}
+    min_brightness: ${dimmer_min_level}
+    max_brightness: ${dimmer_max_level}
+    warmup_brightness: ${dimmer_warmup_level}
+    restore_mode: RESTORE_DEFAULT_OFF
+    default_transition_length: 1s
+    gamma_correct: ${dimmer_gamma_correct}
+
+    # Voltage Sensor
+    voltage:
+      name: Voltage
+      unit_of_measurement: "V"
+      entity_category: "diagnostic"
+      icon: "mdi:battery-charging-60"
+      device_class: "voltage"
+      state_class: "measurement"
+      accuracy_decimals: 1
+
+    # Current Sensor
+    current:
+      name: Current
+      id: current
+      unit_of_measurement: "A"
+      entity_category: "diagnostic"
+      icon: "mdi:current-ac"
+      device_class: "current"
+      state_class: "measurement"
+      accuracy_decimals: 1
+      on_value_range:
+        - above: ${dimmer_max_current}
+          then:
+            - script.execute:
+                id: script_protect_device
+                measure_name: "current"
+                measure_value: ${dimmer_max_current}
+                measure_unit: "A"
+
+    # Power Sensor
+    power:
+      name: Power
+      id: power
+      unit_of_measurement: "W"
+      entity_category: "diagnostic"
+      icon: "mdi:lightning-bolt"
+      device_class: "power"
+      state_class: "measurement"
+      accuracy_decimals: 1
+      on_value_range:
+        - above: ${dimmer_max_power}
+          then:
+            - script.execute:
+                id: script_protect_device
+                measure_name: "power"
+                measure_value: ${dimmer_max_power}
+                measure_unit: "W"
+
+    # Automatic Firmware update for STM32 chip
+    firmware:
+      version: ${dimmer_stmfw_version}
+      update: ${dimmer_stmfw_update}
+
+sensor:
+  - platform: total_daily_energy
+    name: "Total Daily Energy"
+    entity_category: "diagnostic"
+    power_id: power
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+    unit_of_measurement: kWh
