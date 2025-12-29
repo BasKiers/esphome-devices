@@ -43,7 +43,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   # password for hostspot is the same as password for net AP (needs captive_portal)
   ap:
-    ssid: "${device_code}-setup"
+    ssid: "${device_code}"
     password: "${wifi_password}"
     ap_timeout: 5min
 
