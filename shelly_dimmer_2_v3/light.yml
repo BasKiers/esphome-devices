@@ -1,0 +1,42 @@
+# Shelly Dimmer 2 - v3 light. Defaults reproduce v1 (be617c6).
+# Brightness values are raw STM32 units, 0-1000.
+substitutions:
+  min_brightness: "40"
+  max_brightness: "1000"
+  warmup_brightness: "150"
+  gamma_correct: "2.8"
+  leading_edge: "false"           # false = trailing edge (LED)
+  restore_mode: RESTORE_DEFAULT_OFF
+  max_current: "1.0"              # A, device is rated 1.1 A
+  max_power: "190"                # W, device is rated 220 W
+
+light:
+  - platform: shelly_dimmer
+    name: $devicename Light
+    id: ${deviceid}_light
+    leading_edge: ${leading_edge}
+    min_brightness: ${min_brightness}
+    max_brightness: ${max_brightness}
+    warmup_brightness: ${warmup_brightness}
+    gamma_correct: ${gamma_correct}
+    restore_mode: ${restore_mode}
+    firmware:
+      version: "51.7"
+      update: true
+    power:
+      id: ${deviceid}_power
+      name: $devicename Light Power
+      on_value_range:
+        - above: ${max_power}
+          then:
+            - script.execute: {id: protect_device, reason: "power"}
+    voltage:
+      id: ${deviceid}_voltage
+      name: $devicename Light Voltage
+    current:
+      id: ${deviceid}_current
+      name: $devicename Light Current
+      on_value_range:
+        - above: ${max_current}
+          then:
+            - script.execute: {id: protect_device, reason: "current"}

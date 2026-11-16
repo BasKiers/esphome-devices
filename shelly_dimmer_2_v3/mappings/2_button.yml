@@ -1,0 +1,41 @@
+# Two momentary buttons: left = SW1 (up), right = SW2 (down).
+# Swap with gpio_input_1/gpio_input_2 substitutions if wired the other way.
+# press: on (if off) | tap: off | double tap: left 100%, right 1% | hold: left up, right down
+binary_sensor:
+  - platform: template
+    name: "$devicename Button Left"
+    id: ${deviceid}_button_left
+    lambda: return id(${deviceid}_input_1).state;
+    on_press:
+      - script.execute: btn_press
+    on_release:
+      - script.stop: dim_hold
+    on_multi_click:
+      - timing: [ON for at most 400ms, OFF for at least 300ms]
+        then:
+          - script.execute: btn_tap
+      - timing: [ON for at most 400ms, OFF for at most 400ms, ON for at least 1ms]
+        then:
+          - script.execute: light_max
+      - timing: [ON for at least 400ms]
+        then:
+          - script.execute: {id: dim_hold, direction: 1}
+
+  - platform: template
+    name: "$devicename Button Right"
+    id: ${deviceid}_button_right
+    lambda: return id(${deviceid}_input_2).state;
+    on_press:
+      - script.execute: btn_press
+    on_release:
+      - script.stop: dim_hold
+    on_multi_click:
+      - timing: [ON for at most 400ms, OFF for at least 300ms]
+        then:
+          - script.execute: btn_tap
+      - timing: [ON for at most 400ms, OFF for at most 400ms, ON for at least 1ms]
+        then:
+          - script.execute: light_min
+      - timing: [ON for at least 400ms]
+        then:
+          - script.execute: {id: dim_hold, direction: -1}

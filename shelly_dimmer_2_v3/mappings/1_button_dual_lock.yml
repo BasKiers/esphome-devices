@@ -1,0 +1,57 @@
+# Action button on SW1 (works like 1_button), override contact on SW2.
+# Both closed together ("dual") switches the light off, but only when the
+# HA binary sensor ${override_entity_id} turns on within 1 s.
+substitutions:
+  override_entity_id: binary_sensor.none
+
+binary_sensor:
+  - platform: template
+    name: "$devicename Button Action"
+    id: ${deviceid}_button_action
+    lambda: return id(${deviceid}_input_1).state;
+    on_press:
+      - script.execute: btn_press
+    on_release:
+      - script.stop: dim_hold
+    on_multi_click:
+      - timing: [ON for at most 400ms, OFF for at least 300ms]
+        then:
+          - script.execute: btn_tap
+      - timing: [ON for at most 400ms, OFF for at most 400ms, ON for at least 1ms]
+        then:
+          - script.execute: light_max
+      - timing: [ON for at least 400ms]
+        then:
+          - script.execute:
+              id: dim_hold
+              direction: !lambda |-
+                return (id(turned_on_by_press) ||
+                        (id(dim_at_bottom) &&
+                         id(${deviceid}_light).remote_values.get_brightness() <= 0.011f)) ? 1 : -1;
+
+  - platform: template
+    name: "$devicename Button Override"
+    id: ${deviceid}_button_override
+    lambda: return id(${deviceid}_input_2).state;
+
+  - platform: template
+    name: "$devicename Button Dual"
+    id: ${deviceid}_button_dual
+    lambda: return id(${deviceid}_input_1).state && id(${deviceid}_input_2).state;
+    on_multi_click:
+      - timing: [ON for at most 500ms]
+        then:
+          - wait_until:
+              condition:
+                binary_sensor.is_on: ${deviceid}_dual_turning_off
+              timeout: 1000ms
+          - if:
+              condition:
+                binary_sensor.is_on: ${deviceid}_dual_turning_off
+              then:
+                - light.turn_off: ${deviceid}_light
+
+  - platform: homeassistant
+    id: ${deviceid}_dual_turning_off
+    internal: true
+    entity_id: ${override_entity_id}

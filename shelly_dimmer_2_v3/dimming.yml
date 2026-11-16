@@ -1,0 +1,77 @@
+# Shelly Dimmer 2 - v3 button actions, shared by all mappings.
+# Hold-to-dim is time based: brightness = start + rate * elapsed time,
+# so loop delays cannot change the dimming speed.
+# Dimming down always lands exactly on 1% and stops there. Only a new hold
+# that starts from that 1% (or from off) dims up.
+substitutions:
+  dim_rate_pct_per_s: "25"        # 25 %/s = full range in 4 s
+  dim_tick: 50ms
+  dim_max_ms: "8000"              # safety stop if a release is missed
+
+globals:
+  - id: turned_on_by_press        # this press switched the light on
+    type: bool
+  - id: dim_t0
+    type: uint32_t
+  - id: dim_b0
+    type: float
+  - id: dim_at_bottom             # last hold ended by reaching 1%
+    type: bool
+    initial_value: "false"
+
+script:
+  # On press: switch on immediately if off (fast response).
+  - id: btn_press
+    then:
+      - lambda: id(turned_on_by_press) = !id(${deviceid}_light).remote_values.is_on();
+      - if:
+          condition:
+            lambda: return id(turned_on_by_press);
+          then:
+            - light.turn_on: ${deviceid}_light
+
+  # Single tap: switch off, unless this same press just switched it on.
+  - id: btn_tap
+    then:
+      - if:
+          condition:
+            lambda: return !id(turned_on_by_press);
+          then:
+            - light.turn_off: ${deviceid}_light
+
+  - id: light_max
+    then:
+      - light.turn_on: {id: "${deviceid}_light", brightness: 100%}
+
+  - id: light_min
+    then:
+      - light.turn_on: {id: "${deviceid}_light", brightness: 1%}
+
+  # Hold: direction +1 (up) or -1 (down). Stopped by script.stop on release.
+  - id: dim_hold
+    mode: restart
+    parameters:
+      direction: int
+    then:
+      - lambda: |-
+          id(dim_at_bottom) = false;
+          id(dim_t0) = millis();
+          // light was just switched on by this press: start from the bottom
+          id(dim_b0) = id(turned_on_by_press) ? 0.0f
+                       : id(${deviceid}_light).remote_values.get_brightness();
+      - while:
+          condition:
+            lambda: return !id(dim_at_bottom) && millis() - id(dim_t0) < ${dim_max_ms};
+          then:
+            - light.turn_on:
+                id: ${deviceid}_light
+                transition_length: 0s
+                brightness: !lambda |-
+                  float dt = (millis() - id(dim_t0)) / 1000.0f;
+                  float b = id(dim_b0) + direction * dt * ${dim_rate_pct_per_s} / 100.0f;
+                  if (direction < 0 && b <= 0.01f) {
+                    id(dim_at_bottom) = true;   // stop here; next hold dims up
+                    return 0.01f;
+                  }
+                  return clamp(b, 0.01f, 1.0f);
+            - delay: ${dim_tick}

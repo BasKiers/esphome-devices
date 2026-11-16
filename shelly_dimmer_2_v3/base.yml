@@ -1,0 +1,71 @@
+# Shelly Dimmer 2 - v3 base: board, logging, connectivity, outage behaviour.
+# Device yaml provides: esphome name, api encryption, ota, wifi credentials,
+# and substitutions devicename + deviceid.
+substitutions:
+  wifi_lost_reboot_min: "120"   # reboot only after WiFi is gone this long...
+  wifi_lost_jitter_min: "30"    # ...plus 0..this many minutes (random per boot)
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true      # light state survives power loss / reboot
+
+preferences:
+  flash_write_interval: 1min    # limit flash wear
+
+logger:
+  baud_rate: 0                  # UART is used by the STM32 dimmer chip
+
+uart:
+  tx_pin: 1
+  rx_pin: 3
+  baud_rate: 115200
+
+status_led:
+  pin: GPIO15
+
+api:
+  reboot_timeout: 0s            # never reboot because HA is unreachable
+
+wifi:
+  reboot_timeout: 0s            # replaced by the long watchdog below
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+globals:
+  - id: wifi_lost_min
+    type: uint32_t
+    initial_value: "0"
+  - id: wifi_lost_limit_min
+    type: uint32_t
+    initial_value: "0"
+
+esphome:
+  on_boot:
+    - lambda: |-
+        id(wifi_lost_limit_min) = ${wifi_lost_reboot_min} + random_uint32() % (${wifi_lost_jitter_min} + 1);
+
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (wifi::global_wifi_component->is_connected()) {
+            id(wifi_lost_min) = 0;
+          } else if (++id(wifi_lost_min) >= id(wifi_lost_limit_min)) {
+            ESP_LOGW("watchdog", "WiFi lost for %u min, rebooting", id(wifi_lost_min));
+            App.safe_reboot();
+          }
+
+sensor:
+  - platform: wifi_signal
+    name: "$devicename WiFi Signal"
+    update_interval: 60s
+
+  - platform: total_daily_energy
+    name: Daily Energy (Wh)
+    id: ${deviceid}_daily_energy
+    power_id: ${deviceid}_power
+    unit_of_measurement: Wh
+    device_class: energy
+    state_class: total_increasing
