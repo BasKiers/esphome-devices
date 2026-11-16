@@ -20,8 +20,40 @@ uart:
   rx_pin: 3
   baud_rate: 115200
 
-status_led:
-  pin: GPIO15
+# status_led: would own GPIO15, so identify could not blink it too.
+# This light keeps the warning/error blink and is internal (not a HA light).
+# A strobe effect never drives a binary LED low: its off step stays "on"
+# so the effect is not stopped. Identify toggles the light instead.
+# While a warning or error is active, write_state is skipped and the
+# status blink keeps the pin.
+light:
+  - platform: status_led
+    id: ${deviceid}_status_led
+    internal: true
+    pin: GPIO15
+
+button:
+  - platform: template
+    name: "$devicename Identify"
+    id: ${deviceid}_identify
+    entity_category: config
+    device_class: identify
+    on_press:
+      - script.execute: identify_blink
+
+script:
+  # 100ms on / 100ms off, 150 times = 30s. Restarting begins the 30s again.
+  - id: identify_blink
+    mode: restart
+    then:
+      - repeat:
+          count: 150
+          then:
+            - light.turn_on: ${deviceid}_status_led
+            - delay: 100ms
+            - light.turn_off: ${deviceid}_status_led
+            - delay: 100ms
+      - light.turn_off: ${deviceid}_status_led
 
 api:
   reboot_timeout: 0s            # never reboot because HA is unreachable

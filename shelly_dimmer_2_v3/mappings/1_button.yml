@@ -1,27 +1,17 @@
 # One momentary button on SW1 and/or SW2.
 # press: on (if off) | tap: off | double tap: 100% | hold: dim
 # Hold dims down to 1% and stops; hold again from that 1% (or from off) to dim up.
+# Timing is in dimming.yml (btn_down / btn_up), not on_multi_click.
 binary_sensor:
   - platform: template
     name: "$devicename Button"
     id: ${deviceid}_button
     lambda: return id(${deviceid}_input_1).state || id(${deviceid}_input_2).state;
     on_press:
-      - script.execute: btn_press
+      - script.execute:
+          id: btn_down
+          slot: 0
+          double_pct: 100
+          hold_dir: 0
     on_release:
-      - script.stop: dim_hold
-    on_multi_click:
-      - timing: [ON for at most 400ms, OFF for at least 300ms]
-        then:
-          - script.execute: btn_tap
-      - timing: [ON for at most 400ms, OFF for at most 400ms, ON for at least 1ms]
-        then:
-          - script.execute: light_max
-      - timing: [ON for at least 400ms]
-        then:
-          - script.execute:
-              id: dim_hold
-              direction: !lambda |-
-                return (id(turned_on_by_press) ||
-                        (id(dim_at_bottom) &&
-                         id(${deviceid}_light).remote_values.get_brightness() <= 0.011f)) ? 1 : -1;
+      - script.execute: btn_up
