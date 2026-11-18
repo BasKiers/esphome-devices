@@ -1,0 +1,30 @@
+# Two momentary buttons: left = SW1 (up), right = SW2 (down).
+# Swap with gpio_input_1/gpio_input_2 substitutions if wired the other way.
+# press: on (if off) | tap: off | double tap: left 100%, right 1% | hold: left up, right down
+# Timing is in dimming.yml. slot 0 and 1 keep separate double-tap gaps.
+binary_sensor:
+  - platform: template
+    name: "$devicename Button Left"
+    id: ${deviceid}_button_left
+    lambda: return id(${deviceid}_input_1).state;
+    on_press:
+      - script.execute:
+          id: btn_down
+          slot: 0
+          double_pct: 100
+          hold_dir: 1
+    on_release:
+      - script.execute: btn_up
+
+  - platform: template
+    name: "$devicename Button Right"
+    id: ${deviceid}_button_right
+    lambda: return id(${deviceid}_input_2).state;
+    on_press:
+      - script.execute:
+          id: btn_down
+          slot: 1
+          double_pct: 1
+          hold_dir: -1
+    on_release:
+      - script.execute: btn_up

@@ -2,3 +2,5 @@
 secrets.*
 *.bak
 **/.DS_STORE
+**/.esphome/
+build/

@@ -1,0 +1,177 @@
+# Shelly Dimmer 2 - v3 button actions, shared by all mappings.
+# Hold-to-dim is time based: brightness = start + rate * elapsed time,
+# so loop delays cannot change the dimming speed.
+# Dimming down always lands exactly on 1% and stops there. Only a new hold
+# that starts from that 1% (or from off) dims up.
+substitutions:
+  dim_rate_pct_per_s: "25"        # 25 %/s = full range in 4 s
+  dim_tick: 50ms
+  dim_max_ms: "8000"              # safety stop if a release is missed
+  tap_max_ms: "400"               # release at or under this is a tap; hold arms after
+  double_gap_ms: "400"            # press this soon after a short release = double tap
+  single_off_ms: "300"            # pause before tap-off, so a double can cancel it
+
+globals:
+  - id: turned_on_by_press        # this press switched the light on
+    type: bool
+  - id: press_is_double
+    type: bool
+    initial_value: "false"
+  - id: press_slot                # button this gesture belongs to
+    type: int
+    initial_value: "0"
+  - id: press_t0
+    type: uint32_t
+    initial_value: "0"
+  # Per button, so a left tap and a right tap don't form a double.
+  - id: short_rel_ms_0
+    type: uint32_t
+    initial_value: "0"
+  - id: short_rel_ms_1
+    type: uint32_t
+    initial_value: "0"
+  - id: short_rel_ok_0
+    type: bool
+    initial_value: "false"
+  - id: short_rel_ok_1
+    type: bool
+    initial_value: "false"
+  - id: dim_t0
+    type: uint32_t
+  - id: dim_b0
+    type: float
+  - id: dim_at_bottom             # last hold ended by reaching 1%
+    type: bool
+    initial_value: "false"
+
+script:
+  # On press. slot 0/1 keeps its own double-tap gap. double_pct 100 or 1.
+  # hold_dir 0 = down to 1% then up, otherwise a fixed direction.
+  # on_multi_click is not used: its "OFF for at most 400ms" also matched
+  # a press about a second later.
+  - id: btn_down
+    parameters:
+      slot: int
+      double_pct: int
+      hold_dir: int
+    then:
+      - script.stop: btn_hold_arm
+      - script.stop: dim_hold
+      - lambda: |-
+          uint32_t now = millis();
+          bool pending = slot == 0 ? id(short_rel_ok_0) : id(short_rel_ok_1);
+          uint32_t rel = slot == 0 ? id(short_rel_ms_0) : id(short_rel_ms_1);
+          if (slot == 0) id(short_rel_ok_0) = false;
+          else id(short_rel_ok_1) = false;
+          id(press_slot) = slot;
+          id(press_t0) = now;
+          id(press_is_double) = pending && (now - rel) <= ${double_gap_ms};
+      - if:
+          condition:
+            lambda: return id(press_is_double);
+          then:
+            # First tap may already have switched the light off.
+            - script.stop: btn_single_off
+            - if:
+                condition:
+                  lambda: return double_pct <= 1;
+                then:
+                  - script.execute: light_min
+                else:
+                  - script.execute: light_max
+            # Hold, if the finger stays down, starts from that level.
+            - lambda: id(turned_on_by_press) = false;
+          else:
+            # On immediately if off. A tap must not switch that same press back off.
+            - lambda: id(turned_on_by_press) = !id(${deviceid}_light).remote_values.is_on();
+            - if:
+                condition:
+                  lambda: return id(turned_on_by_press);
+                then:
+                  - light.turn_on: ${deviceid}_light
+      - script.execute:
+          id: btn_hold_arm
+          hold_dir: !lambda 'return hold_dir;'
+
+  # Hold starts once the press has lasted tap_max_ms. Release stops this script.
+  - id: btn_hold_arm
+    mode: restart
+    parameters:
+      hold_dir: int
+    then:
+      - delay: ${tap_max_ms}ms
+      - script.execute:
+          id: dim_hold
+          direction: !lambda |-
+            if (hold_dir != 0) return hold_dir;
+            return (id(turned_on_by_press) ||
+                    (id(dim_at_bottom) &&
+                     id(${deviceid}_light).remote_values.get_brightness() <= 0.011f)) ? 1 : -1;
+
+  # On release: stop dimming. A short tap (not the second half of a double)
+  # remembers its time and, if this press did not switch the light on, turns it off.
+  - id: btn_up
+    then:
+      - script.stop: btn_hold_arm
+      - script.stop: dim_hold
+      - if:
+          condition:
+            lambda: return !id(press_is_double) && (millis() - id(press_t0) <= ${tap_max_ms});
+          then:
+            - lambda: |-
+                uint32_t now = millis();
+                if (id(press_slot) == 0) {
+                  id(short_rel_ms_0) = now;
+                  id(short_rel_ok_0) = true;
+                } else {
+                  id(short_rel_ms_1) = now;
+                  id(short_rel_ok_1) = true;
+                }
+            - if:
+                condition:
+                  lambda: return !id(turned_on_by_press);
+                then:
+                  - script.execute: btn_single_off
+
+  - id: btn_single_off
+    mode: restart
+    then:
+      - delay: ${single_off_ms}ms
+      - light.turn_off: ${deviceid}_light
+
+  - id: light_max
+    then:
+      - light.turn_on: {id: "${deviceid}_light", brightness: 100%}
+
+  - id: light_min
+    then:
+      - light.turn_on: {id: "${deviceid}_light", brightness: 1%}
+
+  # Hold: direction +1 (up) or -1 (down). Stopped by script.stop on release.
+  - id: dim_hold
+    mode: restart
+    parameters:
+      direction: int
+    then:
+      - lambda: |-
+          id(dim_at_bottom) = false;
+          id(dim_t0) = millis();
+          // light was just switched on by this press: start from the bottom
+          id(dim_b0) = id(turned_on_by_press) ? 0.0f
+                       : id(${deviceid}_light).remote_values.get_brightness();
+      - while:
+          condition:
+            lambda: return !id(dim_at_bottom) && millis() - id(dim_t0) < ${dim_max_ms};
+          then:
+            - light.turn_on:
+                id: ${deviceid}_light
+                transition_length: 0s
+                brightness: !lambda |-
+                  float dt = (millis() - id(dim_t0)) / 1000.0f;
+                  float b = id(dim_b0) + direction * dt * ${dim_rate_pct_per_s} / 100.0f;
+                  if (direction < 0 && b <= 0.01f) {
+                    id(dim_at_bottom) = true;   // stop here; next hold dims up
+                    return 0.01f;
+                  }
+                  return clamp(b, 0.01f, 1.0f);
+            - delay: ${dim_tick}

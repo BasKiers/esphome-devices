@@ -1,0 +1,24 @@
+# Shelly Dimmer 2 - v3 debounced raw inputs (SW1 = GPIO12, SW2 = GPIO14).
+# Mappings build the named buttons on top of these.
+substitutions:
+  gpio_input_1: GPIO12
+  gpio_input_2: GPIO14
+  debounce_on: 50ms
+  debounce_off: 100ms             # measured bounce gaps are 80-120 ms
+
+binary_sensor:
+  - platform: gpio
+    id: ${deviceid}_input_1
+    internal: true
+    pin: ${gpio_input_1}
+    filters:
+      - delayed_on: ${debounce_on}
+      - delayed_off: ${debounce_off}
+
+  - platform: gpio
+    id: ${deviceid}_input_2
+    internal: true
+    pin: ${gpio_input_2}
+    filters:
+      - delayed_on: ${debounce_on}
+      - delayed_off: ${debounce_off}
