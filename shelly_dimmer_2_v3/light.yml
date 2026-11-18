@@ -3,26 +3,41 @@
 substitutions:
   min_brightness: "40"
   max_brightness: "1000"
+  # Must be > 0. 0 disables warmup and is what a boot-looping unit was set to.
+  # The use below clamps a 0 (or anything outside 1..1000) into that range.
+  # Default 150 stays; do not set this back to 0.
   warmup_brightness: "150"
   gamma_correct: "2.8"
   leading_edge: "false"           # false = trailing edge (LED)
   restore_mode: RESTORE_DEFAULT_OFF
   max_current: "1.0"              # A, device is rated 1.1 A
   max_power: "190"                # W, device is rated 220 W
+  # v1 hardcoded version 51.7 and update true. A failed version read then
+  # mass-erases the STM32 on every boot (blocking, and a hardware-watchdog
+  # candidate). Default update is false so an OTA never starts that erase.
+  # Set stm32_firmware_update: "true" on one flash to match v1 (first ESPHome
+  # install, or an intentional STM32 upgrade). Version stays 51.7.
+  stm32_firmware_version: "51.7"
+  stm32_firmware_update: "false"
 
 light:
   - platform: shelly_dimmer
     name: $devicename Light
     id: ${deviceid}_light
+    output_id: ${deviceid}_dimmer
+    # Component default. setup() already blocks on version + settings + one poll
+    # (about 200 ms x 3 retries per frame when the STM32 is quiet). Do not go faster.
+    update_interval: 10s
     leading_edge: ${leading_edge}
-    min_brightness: ${min_brightness}
-    max_brightness: ${max_brightness}
-    warmup_brightness: ${warmup_brightness}
+    # min also stays at or under max, so a swapped pair cannot invert the curve
+    min_brightness: "${ [0, [min_brightness | int, max_brightness | int, 1000] | min] | max }"
+    max_brightness: "${ [1, [max_brightness | int, 1000] | min] | max }"
+    warmup_brightness: "${ [1, [warmup_brightness | int, 1000] | min] | max }"
     gamma_correct: ${gamma_correct}
     restore_mode: ${restore_mode}
     firmware:
-      version: "51.7"
-      update: true
+      version: ${stm32_firmware_version}
+      update: ${stm32_firmware_update}
     power:
       id: ${deviceid}_power
       name: $devicename Light Power
@@ -40,3 +55,16 @@ light:
         - above: ${max_current}
           then:
             - script.execute: {id: protect_device, reason: "current"}
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - if:
+            condition:
+              lambda: return id(minimal_mode);
+            then:
+              - lambda: id(${deviceid}_dimmer).set_update_interval(60000);
+              - logger.log:
+                  level: WARN
+                  format: "Minimal mode: STM32 poll slowed to 60s"

@@ -1,0 +1,30 @@
+# Compile check for shelly_dimmer_2_v3. Not a device that gets flashed.
+# esphome config / esphome compile this file from the repo root, or from here.
+
+substitutions:
+  devicename: Sample Dimmer
+  deviceid: sample_dimmer
+
+esphome:
+  name: sample-dimmer
+  friendly_name: Sample Dimmer
+
+packages:
+  base: !include ../base.yml
+  light: !include ../light.yml
+  dimming: !include ../dimming.yml
+  inputs: !include ../inputs.yml
+  protect: !include ../protect.yml
+  buttons: !include ../mappings/1_button.yml
+
+api:
+  encryption:
+    key: "bNy+0p2a0m3kQf7r8s1t2u3v4w5x6y7z8A9B0C1D2E4="
+
+ota:
+  - platform: esphome
+    password: "sample-ota-password"
+
+wifi:
+  ssid: "sample-ssid"
+  password: "sample-wifi-password"

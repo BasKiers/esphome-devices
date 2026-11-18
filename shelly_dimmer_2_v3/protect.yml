@@ -22,6 +22,20 @@ script:
             title: "${devicename}"
             message: !lambda 'return "Light turned off: " + reason + " limit exceeded.";'
 
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - if:
+            condition:
+              lambda: return id(minimal_mode);
+            then:
+              # NTC is downstream of this ADC. Stopping it pauses the temperature trip.
+              - lambda: id(${deviceid}_temp_adc).stop_poller();
+              - logger.log:
+                  level: WARN
+                  format: "Minimal mode: NTC protection paused"
+
 sensor:
   - platform: ntc
     sensor: ${deviceid}_temp_resistance

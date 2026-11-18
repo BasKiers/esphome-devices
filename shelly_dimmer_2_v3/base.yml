@@ -4,16 +4,36 @@
 substitutions:
   wifi_lost_reboot_min: "120"   # reboot only after WiFi is gone this long...
   wifi_lost_jitter_min: "30"    # ...plus 0..this many minutes (random per boot)
+  # Third boot in a row that dies before boot_stable_min is a minimal boot:
+  # slower STM32 polling, NTC paused, identify ignored. Cleared after the
+  # device has stayed up that long, and applied in full on the next boot.
+  boot_fail_limit: "3"
+  boot_stable_min: "3"
 
 esp8266:
   board: esp01_1m
   restore_from_flash: true      # light state survives power loss / reboot
 
 preferences:
-  flash_write_interval: 1min    # limit flash wear
+  flash_write_interval: 1min    # limit flash wear; too frequent erases trip the hardware watchdog
 
 logger:
   baud_rate: 0                  # UART is used by the STM32 dimmer chip
+  level: INFO                   # DEBUG at boot is a lot of string work on the 8266
+
+# Safe mode is logger + WiFi + OTA only. The wall buttons are ESP GPIOs and
+# the lamp moves only when the ESP sends a UART frame, so neither the button
+# nor the light exists in safe mode. That matches a crashed unit: the button
+# still worked while the dimmer component was up, and died once safe mode
+# started. Nothing in this package can change that.
+# 5 failed boots (each shorter than boot_is_good_after) then a 15 min window
+# long enough to land an OTA. Counter lives in RTC: a breaker flip clears it,
+# a watchdog reset does not.
+safe_mode:
+  num_attempts: 5
+  boot_is_good_after: 2min
+  reboot_timeout: 15min
+  storage: rtc
 
 uart:
   tx_pin: 1
@@ -39,7 +59,12 @@ button:
     entity_category: config
     device_class: identify
     on_press:
-      - script.execute: identify_blink
+      # Minimal mode skips the 30s strobe; the button still exists for OTA/API.
+      - if:
+          condition:
+            lambda: return !id(minimal_mode);
+          then:
+            - script.execute: identify_blink
 
 script:
   # 100ms on / 100ms off, 150 times = 30s. Restarting begins the 30s again.
@@ -55,11 +80,100 @@ script:
             - delay: 100ms
       - light.turn_off: ${deviceid}_status_led
 
+  # op 0: count this boot. op 1: the uptime mark was reached, clear the streak.
+  # One script so the RTC slot is allocated once. The counter is RTC, not
+  # flash: flash_write_interval is 1 min and these units die at 10-20 s, so a
+  # flash-backed global would still read 0 after a watchdog reset.
+  - id: boot_guard
+    mode: single
+    parameters:
+      op: int
+    then:
+      - lambda: |-
+          struct BootGuard {
+            uint32_t magic;
+            uint32_t count;
+          };
+          static esphome::ESPPreferenceObject pref =
+              esphome::global_preferences->make_preference<BootGuard>(0x5D32B007u, false);
+          BootGuard guard{};
+          if (!pref.load(&guard) || guard.magic != 0xC0A5C001u) {
+            guard.magic = 0xC0A5C001u;
+            guard.count = 0;
+          }
+          if (op == 0) {
+            if (guard.count < 250) guard.count++;
+            pref.save(&guard);
+            id(boot_failures) = guard.count;
+            id(minimal_mode) = guard.count >= ${boot_fail_limit};
+            if (id(minimal_mode)) {
+              ESP_LOGW("boot", "Crash streak %u, minimal mode", guard.count);
+            } else {
+              ESP_LOGI("boot", "Boot streak %u", guard.count);
+            }
+          } else {
+            guard.magic = 0xC0A5C001u;
+            guard.count = 0;
+            pref.save(&guard);
+            id(boot_failures) = 0;
+            ESP_LOGI("boot", "Uptime ok, crash streak cleared");
+          }
+
+  # Runs once the boot has lasted boot_stable_min. This boot stays minimal
+  # if it started that way; the next boot is a normal one.
+  - id: boot_mark_good
+    mode: single
+    then:
+      - delay: ${boot_stable_min}min
+      - script.execute:
+          id: boot_guard
+          op: 1
+
+  # After a real association drops, stop trying for a stretch instead of
+  # the component's 500 ms retry. A boot that has never connected is left
+  # alone so a crash loop can still reach OTA. Streak: 5s, 15s, 30s, 60s, 120s.
+  - id: wifi_backoff
+    mode: queued
+    max_runs: 2
+    then:
+      - if:
+          condition:
+            and:
+              - lambda: return id(wifi_was_up);
+              - not:
+                  wifi.connected:
+          then:
+            - wifi.disable:
+            - delay: !lambda |-
+                const uint32_t pause_ms[] = {5000, 15000, 30000, 60000, 120000};
+                uint32_t step = id(wifi_fail_streak);
+                if (step > 4) step = 4;
+                id(wifi_fail_streak) = step < 4 ? step + 1 : 4;
+                return pause_ms[step];
+            - wifi.enable:
+            - delay: 15s
+            - if:
+                condition:
+                  wifi.connected:
+                then:
+                  - lambda: id(wifi_fail_streak) = 0;
+                else:
+                  - script.execute: wifi_backoff
+
 api:
   reboot_timeout: 0s            # never reboot because HA is unreachable
 
 wifi:
   reboot_timeout: 0s            # replaced by the long watchdog below
+  fast_connect: true            # no full scan on each boot; a crash loop re-associates often
+  power_save_mode: none         # mains powered; modem/CPU sleep has wedged the 8266 stack
+  post_connect_roaming: false   # stationary; roaming scans are extra airtime and have reset 8266s
+  on_connect:
+    - lambda: |-
+        id(wifi_was_up) = true;
+        id(wifi_fail_streak) = 0;
+  on_disconnect:
+    - script.execute: wifi_backoff
 
 time:
   - platform: homeassistant
@@ -72,11 +186,33 @@ globals:
   - id: wifi_lost_limit_min
     type: uint32_t
     initial_value: "0"
+  - id: minimal_mode
+    type: bool
+    initial_value: "false"
+  - id: boot_failures
+    type: uint32_t
+    initial_value: "0"
+  - id: wifi_fail_streak
+    type: uint32_t
+    initial_value: "0"
+  - id: wifi_was_up
+    type: bool
+    initial_value: "false"
 
 esphome:
   on_boot:
-    - lambda: |-
-        id(wifi_lost_limit_min) = ${wifi_lost_reboot_min} + random_uint32() % (${wifi_lost_jitter_min} + 1);
+    - priority: 700
+      then:
+        - script.execute:
+            id: boot_guard
+            op: 0
+    - priority: 600
+      then:
+        - lambda: |-
+            id(wifi_lost_limit_min) = ${wifi_lost_reboot_min} + random_uint32() % (${wifi_lost_jitter_min} + 1);
+    - priority: -100
+      then:
+        - script.execute: boot_mark_good
 
 interval:
   - interval: 1min
