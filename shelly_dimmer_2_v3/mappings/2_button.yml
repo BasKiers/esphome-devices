@@ -1,6 +1,6 @@
 # Two momentary buttons: left = SW1 (up), right = SW2 (down).
 # Swap with gpio_input_1/gpio_input_2 substitutions if wired the other way.
-# press: on (if off) | tap: off | double tap: left 100%, right 1% | hold: left up, right down
+# press: toggle | double tap: left 100%, right 1% | hold: left up, right down
 # Timing is in dimming.yml. slot 0 and 1 keep separate double-tap gaps.
 binary_sensor:
   - platform: template

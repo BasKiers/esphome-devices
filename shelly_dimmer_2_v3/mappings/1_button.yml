@@ -1,5 +1,5 @@
 # One momentary button on SW1 and/or SW2.
-# press: on (if off) | tap: off | double tap: 100% | hold: dim
+# press: toggle | double tap: 100% | hold: dim (restores if tap had turned off)
 # Hold dims down to 1% and stops; hold again from that 1% (or from off) to dim up.
 # Timing is in dimming.yml (btn_down / btn_up), not on_multi_click.
 binary_sensor:
