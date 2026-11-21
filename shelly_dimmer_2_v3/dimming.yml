@@ -9,11 +9,13 @@ substitutions:
   dim_max_ms: "8000"              # safety stop if a release is missed
   tap_max_ms: "400"               # release at or under this is a tap; hold arms after
   double_gap_ms: "400"            # press this soon after a short release = double tap
-  single_off_ms: "300"            # pause before tap-off, so a double can cancel it
 
 globals:
   - id: turned_on_by_press        # this press switched the light on
     type: bool
+  - id: turned_off_by_press       # tap turned light off on press; hold may restore
+    type: bool
+    initial_value: "false"
   - id: press_is_double
     type: bool
     initial_value: "false"
@@ -70,8 +72,6 @@ script:
           condition:
             lambda: return id(press_is_double);
           then:
-            # First tap may already have switched the light off.
-            - script.stop: btn_single_off
             - if:
                 condition:
                   lambda: return double_pct <= 1;
@@ -80,15 +80,26 @@ script:
                 else:
                   - script.execute: light_max
             # Hold, if the finger stays down, starts from that level.
-            - lambda: id(turned_on_by_press) = false;
+            - lambda: |-
+                id(turned_on_by_press) = false;
+                id(turned_off_by_press) = false;
           else:
-            # On immediately if off. A tap must not switch that same press back off.
-            - lambda: id(turned_on_by_press) = !id(${deviceid}_light).remote_values.is_on();
+            # Toggle on press. Hold after tap_max_ms restores if we turned off for a tap.
+            - lambda: |-
+                bool is_on = id(${deviceid}_light).remote_values.is_on();
+                id(turned_on_by_press) = !is_on;
+                id(turned_off_by_press) = is_on;
+                if (is_on) id(dim_b0) = id(${deviceid}_light).remote_values.get_brightness();
             - if:
                 condition:
                   lambda: return id(turned_on_by_press);
                 then:
                   - light.turn_on: ${deviceid}_light
+            - if:
+                condition:
+                  lambda: return id(turned_off_by_press);
+                then:
+                  - light.turn_off: ${deviceid}_light
       - script.execute:
           id: btn_hold_arm
           hold_dir: !lambda 'return hold_dir;'
@@ -100,6 +111,14 @@ script:
       hold_dir: int
     then:
       - delay: ${tap_max_ms}ms
+      - if:
+          condition:
+            lambda: return id(turned_off_by_press);
+          then:
+            - light.turn_on:
+                id: ${deviceid}_light
+                brightness: !lambda 'return id(dim_b0);'
+            - lambda: id(turned_off_by_press) = false;
       - script.execute:
           id: dim_hold
           direction: !lambda |-
@@ -108,8 +127,7 @@ script:
                     (id(dim_at_bottom) &&
                      id(${deviceid}_light).remote_values.get_brightness() <= 0.011f)) ? 1 : -1;
 
-  # On release: stop dimming. A short tap (not the second half of a double)
-  # remembers its time and, if this press did not switch the light on, turns it off.
+  # On release: stop dimming. A short tap records release time for double detection.
   - id: btn_up
     then:
       - script.stop: btn_hold_arm
@@ -127,17 +145,6 @@ script:
                   id(short_rel_ms_1) = now;
                   id(short_rel_ok_1) = true;
                 }
-            - if:
-                condition:
-                  lambda: return !id(turned_on_by_press);
-                then:
-                  - script.execute: btn_single_off
-
-  - id: btn_single_off
-    mode: restart
-    then:
-      - delay: ${single_off_ms}ms
-      - light.turn_off: ${deviceid}_light
 
   - id: light_max
     then:

@@ -1,0 +1,29 @@
+# Compile check for shelly_dimmer_2_v3 two-button mapping.
+
+substitutions:
+  devicename: Sample Dimmer 2Btn
+  deviceid: sample_dimmer_2b
+
+esphome:
+  name: sample-dimmer-2btn
+  friendly_name: Sample Dimmer 2Btn
+
+packages:
+  base: !include ../base.yml
+  light: !include ../light.yml
+  dimming: !include ../dimming.yml
+  inputs: !include ../inputs.yml
+  protect: !include ../protect.yml
+  buttons: !include ../mappings/2_button.yml
+
+api:
+  encryption:
+    key: "bNy+0p2a0m3kQf7r8s1t2u3v4w5x6y7z8A9B0C1D2E4="
+
+ota:
+  - platform: esphome
+    password: "sample-ota-password"
+
+wifi:
+  ssid: "sample-ssid"
+  password: "sample-wifi-password"
